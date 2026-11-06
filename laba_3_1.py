@@ -1,17 +1,17 @@
-while True:
+valid= False
+
+while not valid:
     try:
-        p = float(input('Введите цену 1 кг конфет: '))
+        p = float(input('Введите цену 1 кг конфет: '))
         if p < 0:
             print('Цена не может быть отрицательной. Попробуйте ещё раз.')
-            continue
-        break
+        else:
+            valid = True
     except ValueError:
         print('Ошибка: введите корректное число.')
 
 for k in range(1, 11):
     c = k * p
-    print(f'{k} кг = {c:.2f} руб')
+    print(f'{k} кг = {c:.2f} руб')
 
 print()
-
-
