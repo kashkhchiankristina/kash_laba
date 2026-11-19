@@ -1,8 +1,6 @@
-"""Базовые статистические показатели: среднее, медиана, размах.
+from __future__ import annotations
 
-Реализованы вручную — без statistics, numpy, pandas.
-"""
-
+import math
 from typing import Dict, Sequence
 
 
@@ -18,7 +16,7 @@ def mean(data: Sequence[float]) -> float:
 
 
 def median(data: Sequence[float]) -> float:
-    """Медиана (устойчива к выбросам)."""
+    """Медиана ряда."""
     _ensure_not_empty(data)
     s = sorted(data)
     k = len(s) // 2
@@ -33,14 +31,31 @@ def spread(data: Sequence[float]) -> float:
     return float(max(data) - min(data))
 
 
+def variance(data: Sequence[float]) -> float:
+    """Выборочная дисперсия (знаменатель n - 1)."""
+    _ensure_not_empty(data)
+    n = len(data)
+    if n < 2:
+        raise ValueError("Для расчёта выборочной дисперсии требуется минимум 2 элемента")
+    m = mean(data)
+    return sum((x - m) ** 2 for x in data) / (n - 1)
+
+
+def stdev(data: Sequence[float]) -> float:
+    """Выборочное среднее квадратическое отклонение (СКО)."""
+    return math.sqrt(variance(data))
+
+
 def summarize(data: Sequence[float]) -> Dict[str, float]:
-    """Сводный отчёт: count, mean, median, spread, min, max."""
+    """Сводный отчёт по всем статистическим показателям."""
     _ensure_not_empty(data)
     return {
-        "count": len(data),
+        "count": float(len(data)),
         "mean": mean(data),
         "median": median(data),
         "spread": spread(data),
         "min": float(min(data)),
         "max": float(max(data)),
+        "variance": variance(data),
+        "stdev": stdev(data),
     }

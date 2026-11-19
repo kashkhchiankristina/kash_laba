@@ -1,35 +1,32 @@
-"""Скользящие средние: SMA, центрированное MA, EMA.
+from __future__ import annotations
 
-SMA реализована через бегущую сумму — O(n) вместо O(n * w).
-"""
+import time
+from collections import deque
+from typing import Dict, List, Sequence
 
-from typing import List, Sequence
+
+def _ensure_not_empty(data: Sequence[float]) -> None:
+    if not data:
+        raise ValueError("Ряд пуст: расчёт скользящей средней невозможен")
 
 
 def check_window(window: int, n: int) -> None:
-    """Валидация окна: целое >= 1 и не больше длины ряда."""
-    try:
-        is_positive_int = (window >= 1) and (int(window) == window)
-    except (TypeError, ValueError) as err:
-        raise ValueError(
-            f"window должно быть целым числом >= 1 "
-            f"(получено: {window!r}; причина: {err.args[0]})"
-        ) from err
-    if not is_positive_int:
-        raise ValueError(f"window должно быть целым числом >= 1 (получено: {window!r})")
+    if not isinstance(window, int) or isinstance(window, bool):
+        raise ValueError(f"window должен быть целым, получено: {window!r}")
+    if window < 1:
+        raise ValueError(f"window должен быть >= 1, получено: {window}")
     if window > n:
-        raise ValueError(
-            f"window больше длины ряда (window={window}, n={n})"
-        )
+        raise ValueError(f"window ({window}) больше длины ряда ({n}) — SMA невозможна")
+
+
+def _check_alpha(alpha: float) -> None:
+    if not (0 < alpha <= 1):
+        raise ValueError(f"alpha должен быть в (0, 1], получено: {alpha}")
 
 
 def simple_moving_average(data: Sequence[float], window: int) -> List[float]:
-    """SMA: среднее по последним window точкам.
-
-    Длина результата: len(data) - window + 1.
-    """
-    if not data:
-        raise ValueError("Ряд пуст: расчёт скользящей средней невозможен")
+    """SMA через бегущую сумму (O(n))."""
+    _ensure_not_empty(data)
     check_window(window, len(data))
 
     running = sum(data[:window])
@@ -40,47 +37,55 @@ def simple_moving_average(data: Sequence[float], window: int) -> List[float]:
     return result
 
 
-def centered_moving_average(data: Sequence[float], window: int) -> List[float]:
-    """Центрированное МА: окно нечётное, выход выровнен по центру окна.
-
-    Длина результата: len(data) - window + 1 (края ряда не заполняются).
-    """
-    if not data:
-        raise ValueError("Ряд пуст: расчёт скользящей средней невозможен")
+def simple_moving_average_deque(data: Sequence[float], window: int) -> List[float]:
+    """SMA с использованием collections.deque."""
+    _ensure_not_empty(data)
     check_window(window, len(data))
-    if window % 2 == 0:
-        raise ValueError(
-            f"окно центрированного МА должно быть нечётным (получено: {window})"
-        )
 
-    half = window // 2
-    return [
-        sum(data[i - half:i - half + window]) / window
-        for i in range(half, len(data) - half)
-    ]
+    buf: deque[float] = deque(maxlen=window)
+    running = 0.0
+    result: List[float] = []
+
+    for i, x in enumerate(data):
+        if len(buf) == window:
+            running -= buf[0]
+        buf.append(x)
+        running += x
+        if i >= window - 1:
+            result.append(running / window)
+    return result
 
 
 def exponential_moving_average(data: Sequence[float], alpha: float) -> List[float]:
-    """EMA: EMA[0] = data[0]; EMA[i] = alpha * data[i] + (1 - alpha) * EMA[i - 1].
+    """Экспоненциальная скользящая средняя (EMA)."""
+    _ensure_not_empty(data)
+    _check_alpha(alpha)
 
-    Требование: 0 < alpha <= 1. Длина результата равна длине ряда.
-    """
-    if not data:
-        raise ValueError("Ряд пуст: расчёт скользящей средней невозможен")
-    try:
-        ok = (0.0 < float(alpha) <= 1.0) and (float(alpha) == alpha)
-    except (TypeError, ValueError) as err:
-        raise ValueError(
-            f"alpha должно быть числом в диапазоне 0 < alpha <= 1 "
-            f"(получено: {alpha!r}; причина: {err.args[0]})"
-        ) from err
-    if not ok:
-        raise ValueError(
-            f"alpha должно быть числом в диапазоне 0 < alpha <= 1 (получено: {alpha!r})"
-        )
-
-    result: List[float] = [float(data[0])]
-    a = float(alpha)
-    for i in range(1, len(data)):
-        result.append(a * data[i] + (1.0 - a) * result[-1])
+    prev = float(data[0])
+    result = [prev]
+    for x in data[1:]:
+        prev = alpha * x + (1.0 - alpha) * prev
+        result.append(prev)
     return result
+
+
+def benchmark_moving_average(
+    data: Sequence[float],
+    window: int,
+    repeats: int = 1000,
+) -> Dict[str, float]:
+    """Замер среднего времени выполнения SMA на list и deque."""
+    _ensure_not_empty(data)
+    check_window(window, len(data))
+
+    t0 = time.perf_counter()
+    for _ in range(repeats):
+        simple_moving_average(data, window)
+    t_list = (time.perf_counter() - t0) / repeats
+
+    t0 = time.perf_counter()
+    for _ in range(repeats):
+        simple_moving_average_deque(data, window)
+    t_deque = (time.perf_counter() - t0) / repeats
+
+    return {"list": t_list, "deque": t_deque}
